@@ -2,14 +2,18 @@ import React from "react";
 import { Alert, Card, Form, Button, Row, Col } from "react-bootstrap";
 
 import API from "../../resource/api";
+import { ProductTable } from "../../components";
 
 class ProductEdict extends React.Component {
   state = {
+    id: null,
     name: "",
     brand: "",
     price: "",
     imageURL: "",
-    show: false
+    show: false,
+    showMessage: "",
+    products: []
   };
 
   onSubmit = async () => {
@@ -19,11 +23,48 @@ class ProductEdict extends React.Component {
       this.state.price &&
       this.state.imageURL
     ) {
-      console.log("Enviando os Dados...");
-      const products = (await API.get("/products")).data;
-      console.log(products);
+      const priceFloat = parseFloat(this.state.price);
+      if (isNaN(priceFloat)) {
+        this.setShow(true, "Preço Inválido!");
+        return;
+      }
+      const payload = {
+        name: this.state.name,
+        brand: this.state.brand,
+        price: this.state.price,
+        imageURL: this.state.imageURL
+      };
+      if (this.state.id) {
+        payload.id = this.state.id;
+        try {
+          const products = (await API.put("/produto", payload)).data;
+          if (products) {
+            this.setState({ name: "", brand: "", price: "", imageURL: "" });
+            this.setProducts();
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      } else {
+        try {
+          const products = (await API.post("/produto", payload)).data;
+          if (products) {
+            this.setState({ name: "", brand: "", price: "", imageURL: "" });
+            this.setProducts();
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      this.setState({
+        id: null,
+        name: "",
+        brand: "",
+        price: "",
+        imageURL: ""
+      });
     } else {
-      this.setShow(true);
+      this.setShow(true, "Todos os campos são obrigatórios!");
     }
   };
 
@@ -48,7 +89,26 @@ class ProductEdict extends React.Component {
     });
   };
 
-  setShow = status => this.setState({ show: status });
+  setShow = (status, message) =>
+    this.setState({ show: status, showMessage: message });
+
+  setProducts = async () => {
+    this.setState({ products: (await API.get("/produtos")).data });
+  };
+
+  handleOnRemove = async p => {
+    const result = (await API.delete(`/produto/${p.id}`)).data;
+    this.setProducts();
+  };
+
+  handleOnUpdate = async p => {
+    const { id, name, brand, price, imageURL } = { ...p };
+    this.setState({ id, name, brand, price, imageURL });
+  };
+
+  componentDidMount = async () => {
+    this.setProducts();
+  };
 
   render() {
     const { name, brand, price, imageURL, show } = this.state;
@@ -60,11 +120,10 @@ class ProductEdict extends React.Component {
               variant="danger"
               show={show}
               size="sm"
-              onClose={() => this.setShow(false)}
+              onClose={() => this.setShow(false, null)}
               dismissible
             >
-              {/* <Alert.Heading>Todos os campos são obrigatórios!</Alert.Heading> */}
-              <p className={"p-0 m-0"}>Todos os campos são obrigatórios.</p>
+              <p className={"p-0 m-0"}>{this.state.showMessage}</p>
             </Alert>
             <Card.Title>Cadastro de Produtos</Card.Title>
             <Form>
@@ -99,7 +158,7 @@ class ProductEdict extends React.Component {
                     <Form.Label>Preço</Form.Label>
                     <Form.Control
                       type="text"
-                      placeholder="Informe o valor do produto"
+                      placeholder="Ex: 12.50"
                       value={price}
                       onChange={this.updatePrice}
                     />
@@ -128,10 +187,12 @@ class ProductEdict extends React.Component {
             </Form>
           </Card.Body>
         </Card>
-        <div>nome: {name}</div>
-        <div>marca: {brand}</div>
-        <div>preco: {price}</div>
-        <div>image: {imageURL}</div>
+
+        <ProductTable
+          products={this.state.products}
+          onRemove={this.handleOnRemove}
+          onUpdate={this.handleOnUpdate}
+        />
       </div>
     );
   }
